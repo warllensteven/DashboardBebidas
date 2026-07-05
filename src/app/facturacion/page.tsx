@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Product, Client, PaymentMethod } from '@/types'
+import { Product, Client, PaymentMethod, DeliveryMan } from '@/types'
 import {
   FileText, Plus, Search, Trash2, Loader2,
-  User, CreditCard, X
+  User, CreditCard, X, Bike
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -24,37 +24,49 @@ interface PaymentEntry {
 export default function FacturacionPage() {
   const supabase = createClient()
 
-  const [products, setProducts] = useState<Product[]>([])
-  const [clients, setClients]   = useState<Client[]>([])
-  const [loading, setLoading]   = useState(true)
+  const [products, setProducts]         = useState<Product[]>([])
+  const [clients, setClients]           = useState<Client[]>([])
+  const [deliveryMen, setDeliveryMen]   = useState<DeliveryMan[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  const [cart, setCart]         = useState<CartItem[]>([])
-  const [clientId, setClientId] = useState('')
+  const [cart, setCart]                 = useState<CartItem[]>([])
+  const [clientId, setClientId]         = useState('')
   const [clientName, setClientName]     = useState('')
   const [clientCedula, setClientCedula] = useState('')
   const [clientPhone, setClientPhone]   = useState('')
-  const [notes, setNotes]       = useState('')
-  const [invoiceNum, setInvoiceNum] = useState<number | null>(null)
-  const [payments, setPayments] = useState<PaymentEntry[]>([
+  const [notes, setNotes]               = useState('')
+  const [invoiceNum, setInvoiceNum]     = useState<number | null>(null)
+  const [isDelivery, setIsDelivery]     = useState(false)
+  const [deliveryManId, setDeliveryManId] = useState('')
+  const [payments, setPayments]         = useState<PaymentEntry[]>([
     { method: 'efectivo', amount: '', reference: '' }
   ])
-  const [saving, setSaving]     = useState(false)
+  const [saving, setSaving]             = useState(false)
 
-  const [productSearch, setProductSearch]       = useState('')
+  const [productSearch, setProductSearch]         = useState('')
   const [showProductSearch, setShowProductSearch] = useState(false)
-  const [clientSearch, setClientSearch]         = useState('')
-  const [showClientSearch, setShowClientSearch] = useState(false)
+  const [clientSearch, setClientSearch]           = useState('')
+  const [showClientSearch, setShowClientSearch]   = useState(false)
+  const [deliverySearch, setDeliverySearch]       = useState('')
+  const [showDeliverySearch, setShowDeliverySearch] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
-    const [{ data: prods }, { data: cls }] = await Promise.all([
+
+    const { data: { user } } = await supabase.auth.getUser()
+    setCurrentUserId(user?.id || null)
+
+    const [{ data: prods }, { data: cls }, { data: dlv }] = await Promise.all([
       supabase.from('products').select('*, categories(*)').eq('active', true).order('name'),
       supabase.from('clients').select('*').order('name'),
+      supabase.from('delivery_men').select('*').eq('active', true).order('name'),
     ])
     setProducts(prods || [])
     setClients(cls || [])
+    setDeliveryMen(dlv || [])
 
     const { data: last } = await supabase
       .from('invoices').select('invoice_number')
@@ -90,6 +102,7 @@ export default function FacturacionPage() {
   }
 
   const subtotal  = cart.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+  const totalUnits = cart.reduce((s, i) => s + i.quantity, 0)
   const totalPaid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
   const remaining = subtotal - totalPaid
 
@@ -140,6 +153,10 @@ export default function FacturacionPage() {
           subtotal, total: subtotal,
           amount_paid: totalPaid,
           notes: notes || null,
+          is_delivery: isDelivery,
+          delivery_man_id: isDelivery && deliveryManId ? deliveryManId : null,
+          delivered: false,
+          created_by: currentUserId,
           status: totalPaid === 0 ? 'pendiente' : totalPaid >= subtotal ? 'pagado' : 'pagado_parcial',
         })
         .select().single()
@@ -167,7 +184,7 @@ export default function FacturacionPage() {
 
       toast.success(`✅ Factura #${invoice.invoice_number} creada`)
       setCart([]); setClientId(''); setClientName(''); setClientCedula('')
-      setClientPhone(''); setNotes('')
+      setClientPhone(''); setNotes(''); setIsDelivery(false); setDeliveryManId('')
       setPayments([{ method: 'efectivo', amount: '', reference: '' }])
       loadData()
     } catch (e: any) {
@@ -180,11 +197,14 @@ export default function FacturacionPage() {
   const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(productSearch.toLowerCase()) && p.stock > 0
   )
-
   const filteredClients = clients.filter(c =>
     c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
     (c.cedula || '').includes(clientSearch)
   )
+  const filteredDelivery = deliveryMen.filter(d =>
+    d.name.toLowerCase().includes(deliverySearch.toLowerCase())
+  )
+  const selectedDeliveryMan = deliveryMen.find(d => d.id === deliveryManId)
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -218,7 +238,6 @@ export default function FacturacionPage() {
         <p className="font-semibold text-slate-700 flex items-center gap-2">
           <User className="w-4 h-4" /> Cliente
         </p>
-
         {clientId ? (
           <div className="flex items-center justify-between bg-blue-50 rounded-lg p-3">
             <div>
@@ -237,7 +256,8 @@ export default function FacturacionPage() {
                 placeholder="Buscar cliente existente..."
                 value={clientSearch}
                 onChange={e => { setClientSearch(e.target.value); setShowClientSearch(true) }}
-                onFocus={() => setShowClientSearch(true)}
+                  onFocus={() => setShowClientSearch(true)}
+                  onBlur={() => setTimeout(() => setShowClientSearch(false), 150)}
               />
               {showClientSearch && clientSearch && filteredClients.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
@@ -264,9 +284,74 @@ export default function FacturacionPage() {
         )}
       </div>
 
+      {/* Domicilio */}
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-slate-700 flex items-center gap-2">
+            <Bike className="w-4 h-4" /> Domicilio
+          </p>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <span className="text-sm text-slate-600">¿Es domicilio?</span>
+            <div
+              onClick={() => { setIsDelivery(!isDelivery); setDeliveryManId('') }}
+              className={`w-10 h-6 rounded-full transition-colors cursor-pointer ${isDelivery ? 'bg-blue-600' : 'bg-slate-200'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full shadow mt-1 transition-transform ${isDelivery ? 'translate-x-5' : 'translate-x-1'}`} />
+            </div>
+          </label>
+        </div>
+
+        {isDelivery && (
+          <div className="relative">
+            {selectedDeliveryMan ? (
+              <div className="flex items-center justify-between bg-blue-50 rounded-lg p-3">
+                <div>
+                  <p className="font-medium text-slate-800">{selectedDeliveryMan.name}</p>
+                  {selectedDeliveryMan.phone && (
+                    <p className="text-xs text-slate-500">{selectedDeliveryMan.phone}</p>
+                  )}
+                </div>
+                <button onClick={() => setDeliveryManId('')} className="btn-ghost btn btn-sm">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+  className="input"
+  placeholder="Buscar domiciliario..."
+  value={deliverySearch}
+  onChange={e => { setDeliverySearch(e.target.value); setShowDeliverySearch(true) }}
+  onFocus={() => setShowDeliverySearch(true)}
+  onBlur={() => setTimeout(() => setShowDeliverySearch(false), 150)}
+/>
+                {showDeliverySearch && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                    {filteredDelivery.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-slate-400">Sin resultados</p>
+                    ) : filteredDelivery.map(d => (
+                      <button key={d.id}
+                        onClick={() => { setDeliveryManId(d.id); setDeliverySearch(''); setShowDeliverySearch(false) }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 text-sm">
+                        {d.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Productos */}
       <div className="card p-4 space-y-3">
-        <p className="font-semibold text-slate-700">Productos</p>
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-slate-700">Productos</p>
+          {cart.length > 0 && (
+            <span className="text-xs text-slate-400">{totalUnits} unidades · {cart.length} referencias</span>
+          )}
+        </div>
 
         {cart.length > 0 && (
           <div className="space-y-2">
@@ -302,6 +387,7 @@ export default function FacturacionPage() {
             value={productSearch}
             onChange={e => { setProductSearch(e.target.value); setShowProductSearch(true) }}
             onFocus={() => setShowProductSearch(true)}
+            onBlur={() => setTimeout(() => setShowProductSearch(false), 150)}
           />
           {showProductSearch && productSearch && (
             <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -334,7 +420,6 @@ export default function FacturacionPage() {
             <Plus className="w-3 h-3" /> Agregar
           </button>
         </div>
-
         {payments.map((p, i) => (
           <div key={i} className="flex gap-2 items-center">
             <select className="input w-36" value={p.method}
@@ -365,6 +450,10 @@ export default function FacturacionPage() {
 
       {/* Totales */}
       <div className="card p-4 space-y-2">
+        <div className="flex justify-between text-sm text-slate-600">
+          <span>Total productos</span>
+          <span>{totalUnits} unidades en {cart.length} referencias</span>
+        </div>
         <div className="flex justify-between text-sm text-slate-600">
           <span>Subtotal</span>
           <span>${subtotal.toLocaleString('es-CO')}</span>

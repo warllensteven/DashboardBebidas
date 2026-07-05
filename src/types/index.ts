@@ -40,6 +40,52 @@ export interface Client {
   created_at: string
 }
 
+// ─── Domiciliarios ───────────────────────────────────────────
+export interface DeliveryMan {
+  id: string
+  name: string
+  phone: string | null
+  active: boolean
+  created_at: string
+}
+
+export interface DeliveryShift {
+  id: string
+  delivery_man_id: string
+  base_amount: number
+  date: string
+  created_at: string
+  delivery_men?: DeliveryMan
+}
+
+export interface DeliveryExpense {
+  id: string
+  delivery_man_id: string
+  amount: number
+  description: string
+  date: string
+  created_at: string
+  delivery_men?: DeliveryMan
+}
+
+// ─── Órdenes de compra (entrada de mercancía) ────────────────
+export interface PurchaseOrder {
+  id: string
+  notes: string | null
+  created_at: string
+  purchase_order_items?: PurchaseOrderItem[]
+}
+
+export interface PurchaseOrderItem {
+  id: string
+  purchase_order_id: string
+  product_id: string
+  quantity: number
+  unit_cost: number | null
+  created_at: string
+  products?: Product
+}
+
 // ─── Facturas ────────────────────────────────────────────────
 export type InvoiceStatus = 'pendiente' | 'pagado_parcial' | 'pagado' | 'cancelado'
 export type PaymentMethod = 'efectivo' | 'nequi' | 'banco' | 'combinado'
@@ -53,11 +99,16 @@ export interface Invoice {
   total: number
   amount_paid: number
   notes: string | null
+  delivery_man_id: string | null
+  delivered: boolean
+  is_delivery: boolean
+  created_by: string | null
   created_at: string
   updated_at: string
   clients?: Client
   invoice_items?: InvoiceItem[]
   payments?: Payment[]
+  delivery_men?: DeliveryMan
 }
 
 export interface InvoiceItem {

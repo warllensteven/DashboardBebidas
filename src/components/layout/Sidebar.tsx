@@ -5,19 +5,22 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, FileText, ShoppingCart,
-  Package, Archive, LogOut, Package2, Menu, X
+  Package, Archive, LogOut, Package2, Menu, X, Bike, BarChart2, Truck
 } from 'lucide-react'
 import { useState } from 'react'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 
 const navItems = [
-  { href: '/dashboard',            label: 'Dashboard',          icon: LayoutDashboard },
-  { href: '/caja',                 label: 'Caja / Ventas',      icon: ShoppingCart },
-  { href: '/facturacion',          label: 'Nueva factura',      icon: FileText },
-  { href: '/facturacion/historial',label: 'Historial facturas', icon: Archive },
-  { href: '/inventario',           label: 'Inventario',         icon: Archive },
-  { href: '/productos',            label: 'Productos',          icon: Package },
+  { href: '/dashboard',             label: 'Dashboard',          icon: LayoutDashboard },
+  { href: '/caja',                  label: 'Caja / Ventas',      icon: ShoppingCart },
+  { href: '/facturacion',           label: 'Nueva factura',      icon: FileText },
+  { href: '/facturacion/historial', label: 'Historial facturas', icon: FileText },
+  { href: '/inventario',            label: 'Inventario',         icon: Archive },
+  { href: '/productos',             label: 'Productos',          icon: Package },
+  { href: '/domiciliarios', label: 'Domiciliarios', icon: Bike },
+  { href: '/reportes', label: 'Reportes', icon: BarChart2 },
+  { href: '/proveedores', label: 'Proveedores', icon: Truck },
 ]
 
 export default function Sidebar() {
